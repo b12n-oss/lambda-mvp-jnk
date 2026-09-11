@@ -52,4 +52,13 @@
                      {:keys [exit]} (p/shell {:continue true}
                                              "docker" "build" "--platform" platform
                                              "-t" "lambda-mvp-jnk:latest" ".")]
-                 (System/exit exit))}}}
+                 (System/exit exit))}
+
+  deploy {:doc "idempotent: ECR repo + IAM role + Lambda function, create or update"
+          :task (p/shell "bb" "script/aws_lifecycle.clj" "deploy")}
+
+  invoke {:doc "single ad-hoc invoke, prints response + REPORT line"
+          :task (p/shell "bb" "script/aws_lifecycle.clj" "invoke")}
+
+  teardown {:doc "delete the function + role + ECR repo"
+            :task (p/shell "bb" "script/aws_lifecycle.clj" "teardown")}}}
