@@ -1,0 +1,27 @@
+(ns net.b12n.lambda-mvp.main
+  "Entry point -- compiled to a native binary by `jank compile`.
+  A container's ENTRYPOINT execs this binary directly.
+
+  NO try/catch here, unlike the Jolt version's main.clj -- try/catch
+  is verified prohibitively slow to jank compile (15+ minutes,
+  non-terminating, zero interop content -- spec Open Risk #9). If
+  runtime/run throws (a malformed AWS_LAMBDA_RUNTIME_API, or the
+  initial connection to the Runtime API sidecar failing), the
+  exception propagates uncaught: jank prints its own error report to
+  stderr, but the process then EXITS 0 -- verified directly (a trivial
+  uncaught-throw probe), not assumed. This is worse for diagnosability
+  than a non-zero exit would be: nothing in the exit status itself
+  signals failure, so anything watching this process (a container
+  orchestrator, Lambda's own supervisor) has to notice the *absence* of
+  a Runtime API response instead. No runtime/post-init-error call
+  happens either (there is no catch point left to call it from -- that
+  fn stays public and unused in runtime.jank, ready to wire back in if
+  a future jank release resolves the try/catch cost). Both effects
+  together are a real, documented divergence from the Jolt sibling,
+  which reports a clean init-error to the Lambda Runtime API AND still
+  distinguishes success from failure via its own exit code."
+  (:require [net.b12n.lambda-mvp.handler :as handler]
+            [net.b12n.lambda-mvp.runtime :as runtime]))
+
+(defn -main [& _args]
+  (runtime/run handler/handle))
