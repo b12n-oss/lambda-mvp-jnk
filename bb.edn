@@ -40,4 +40,16 @@
                          (do
                            (p/shell {:extra-env {"AWS_LAMBDA_RUNTIME_API" (str "127.0.0.1:" port)}}
                                     "./target/bootstrap")
-                           (System/exit (:exit (deref srv)))))))))}}}
+                           (System/exit (:exit (deref srv)))))))))}
+
+  image {:doc "docker build -> a locally tagged image (LAMBDA_ARCH, default amd64 -- confirmed by Phase 0 Task 2: jank's PPA ships amd64 only for Ubuntu 24.04, arm64 does not exist)"
+         :task (let [arch (or (System/getenv "LAMBDA_ARCH") "amd64")
+                     platform (case arch
+                                "arm64" "linux/arm64"
+                                ("x86_64" "amd64") "linux/amd64"
+                                (do (println "image: LAMBDA_ARCH must be arm64 or amd64, got" arch)
+                                    (System/exit 1)))
+                     {:keys [exit]} (p/shell {:continue true}
+                                             "docker" "build" "--platform" platform
+                                             "-t" "lambda-mvp-jnk:latest" ".")]
+                 (System/exit exit))}}}
