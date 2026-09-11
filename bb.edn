@@ -61,4 +61,13 @@
           :task (p/shell "bb" "script/aws_lifecycle.clj" "invoke")}
 
   teardown {:doc "delete the function + role + ECR repo"
-            :task (p/shell "bb" "script/aws_lifecycle.clj" "teardown")}}}
+            :task (p/shell "bb" "script/aws_lifecycle.clj" "teardown")}
+
+  bench {:doc "cold/warm boot-time comparison across memory tiers"
+         :task (p/shell "bb" "script/bench_run.clj")}
+
+  demo {:doc "image + deploy + invoke in one go, checking every prerequisite before starting"
+        :task (p/shell "bb" "script/demo.clj")}
+
+  clean {:doc "remove build artifacts"
+         :task (p/shell "rm" "-rf" "target")}}}
