@@ -4,10 +4,21 @@
   info {:doc "task cheat-sheet"
         :task (do (println "lambda-mvp-jnk -- a shareable AWS Lambda custom runtime in jank")
                   (println "")
-                  (println "  bb info    task cheat-sheet")
-                  (println "  bb test    run script/bench.clj's unit tests")
+                  (println "  bb probe       offline e2e: mock Runtime API + real jank loop (no AWS, no Docker)")
+                  (println "  bb check       headless AOT-compile of the whole src/ tree")
+                  (println "  bb test        run script/bench.clj's unit tests")
+                  (println "  bb demo        image + deploy + invoke in one go, prerequisites checked first")
+                  (println "  bb image       docker build -> a locally tagged image (LAMBDA_ARCH, default amd64)")
+                  (println "  bb deploy      idempotent: ECR repo + IAM role + Lambda function")
+                  (println "  bb invoke      single ad-hoc invoke, prints response + REPORT line")
+                  (println "  bb bench       cold/warm boot-time comparison across memory tiers")
+                  (println "  bb teardown    delete the function + role + ECR repo")
+                  (println "  bb clean       remove build artifacts")
                   (println "")
-                  (println "More tasks (probe/image/deploy/invoke/bench/teardown) land in later phases."))}
+                  (println "(babashka is still required -- several tasks shell out to a real `bb`")
+                  (println " binary internally.)")
+                  (println "")
+                  (println "No task hardcodes an AWS profile, account, or region -- see README.md"))}
 
   test {:doc "run script/bench.clj's unit tests"
         :task (p/shell "bb" "test/bench_test.clj")}
