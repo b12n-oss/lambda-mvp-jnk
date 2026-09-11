@@ -8,7 +8,10 @@ name: CI
 # runner reads bb.edn directly and this repo's bb.edn has nothing
 # jank-specific in its task bodies -- verified during this arc
 # (`jolt info`/`jolt test` both ran cleanly, unmodified). Same pattern
-# the Jolt sibling's own site.yml uses to install jolt.
+# the Jolt sibling's own site.yml uses to install jolt. babashka
+# itself is still installed below, because this repo's own `test`
+# task body shells out to a real `bb` binary regardless of which
+# runner (`jolt` or `bb`) invokes the task.
 
 on:
   push:
@@ -27,6 +30,10 @@ jobs:
 
       - name: Install jolt
         uses: jlt-commons/setup-jolt@v1
+
+      - uses: DeLaGuardo/setup-clojure@13.6.1
+        with:
+          bb: 1.12.196
 
       - name: Run tests (via jolt, not bb -- just for fun)
         run: jolt test
