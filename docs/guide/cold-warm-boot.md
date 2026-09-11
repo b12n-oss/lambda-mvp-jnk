@@ -39,6 +39,49 @@ This port doesn't do that yet, so today's `bb bench` numbers include
 the cost of pulling/unpacking packages the running function never
 touches.
 
+## A real measured run
+
+Measured against this repo's own account (`ap-southeast-2`, x86_64,
+2026-09-12), `jank compile`d from this port's exact `HEAD` at the time,
+default tiers and sample count:
+
+| Metric | 2048 MB | 3008 MB |
+|---|---|---|
+| Cold `Init Duration` | 510.3 ms | 64.0 ms |
+| Cold `Duration` | 1.7 ms | 1.5 ms |
+| Warm `Duration` (min/median/max) | 1.3 / 1.4 / 1.7 ms | 1.2 / 1.3 / 1.4 ms |
+| Max Memory Used | 26 MB | 26 MB |
+
+Marked illustrative, not a live guarantee, same as the Jolt sibling's
+own numbers -- a single run, one account, one region, one moment in
+time. Run `bb bench` yourself for a number that reflects your own
+account and region.
+
+One result here is worth naming rather than smoothing over: the 3008
+MB tier's cold `Init Duration` (64.0 ms) is far BELOW the 2048 MB
+tier's (510.3 ms), the opposite of what more memory buying a faster
+cold start would predict on its own. The likely explanation isn't
+memory size, it's ECR image-layer caching: `bb bench` runs the 2048 MB
+tier first, which is this deploy's actual first invocation and so the
+first time Lambda pulls this image's layers from ECR. By the time the
+3008 MB tier's `update-function-configuration` forces a fresh
+execution environment, Lambda has already cached those layers -- a
+plain memory-size change doesn't force a fresh image pull, only a
+fresh sandbox. So this run's two "cold" samples aren't independently
+cold in the image-pull sense, only in the execution-environment sense,
+and the 2048 MB number is closer to a genuine worst-case first-pull
+cold start than the 3008 MB one is. A run that wants to isolate memory
+size's own effect on cold start would need to force an image re-pull
+between tiers (e.g. deploy under a fresh image tag, or a fresh
+function name) rather than relying on `bb bench`'s existing
+config-change-only reset.
+
+Warm `Duration` and Max Memory Used both landed as expected: low
+single-digit milliseconds once a sandbox has served an event, and a
+small, roughly constant memory footprint (this port's demo handler
+does nothing beyond string-building and an atom `swap!`) regardless of
+the configured tier.
+
 ## Reproducing a run
 
 ```sh
