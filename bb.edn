@@ -1,0 +1,13 @@
+{:tasks
+ {:requires ([babashka.process :as p])
+
+  info {:doc "task cheat-sheet"
+        :task (do (println "lambda-mvp-jnk -- a shareable AWS Lambda custom runtime in jank")
+                  (println "")
+                  (println "  bb info    task cheat-sheet")
+                  (println "  bb test    run script/bench.clj's unit tests")
+                  (println "")
+                  (println "More tasks (probe/image/deploy/invoke/bench/teardown) land in later phases."))}
+
+  test {:doc "run script/bench.clj's unit tests"
+        :task (p/shell "bb" "test/bench_test.clj")}}}
