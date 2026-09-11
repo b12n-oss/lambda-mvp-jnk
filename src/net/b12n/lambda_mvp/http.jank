@@ -56,8 +56,17 @@ std::string jank_recv_chunk(int fd, int max_len) {
     (cpp/= (.-sin_port addr) (cpp/jank_htons (cpp/cast cpp/uint16_t port)))
     (cpp/inet_pton cpp/AF_INET host (cpp/& (.-sin_addr addr)))
     (let [rc (cpp/jank_connect fd addr)]
+      ;; addr is only needed to set up connect() -- nothing after this
+      ;; point uses it again on either path, so free it here rather than
+      ;; leaking it on every call (this fn opens one socket per request,
+      ;; per the module docstring, so a leak here is a leak per request).
+      (cpp/delete addr)
       (if (cpp/< rc (cpp/int 0))
-        (throw (ex-info "http: connect failed" {:host host :port port}))
+        ;; fd is also otherwise leaked: connect() failing doesn't close
+        ;; the fd it was given, and nothing else in this fn's failure
+        ;; path did either.
+        (do (cpp/close fd)
+            (throw (ex-info "http: connect failed" {:host host :port port})))
         fd))))
 
 (defn- header-block-end
