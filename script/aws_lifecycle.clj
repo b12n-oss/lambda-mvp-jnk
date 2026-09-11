@@ -194,10 +194,16 @@
             "--output" "text"
             out-file)]
     (when-not (zero? exit) (die! "invoke failed:" err))
-    (println "lambda-mvp-jnk: response body:")
-    (println (slurp out-file))
-    (println "lambda-mvp-jnk: log tail:")
-    (println (String. (.decode (java.util.Base64/getDecoder) (str/trim out))))))
+    (let [body (slurp out-file)
+          log-tail (String. (.decode (java.util.Base64/getDecoder) (str/trim out)))
+          parsed (try (json/parse-string body) (catch Exception _ nil))]
+      (println "lambda-mvp-jnk: response body:")
+      (println body)
+      (println "lambda-mvp-jnk: log tail:")
+      (println log-tail)
+      (when (and (map? parsed) (get parsed "errorType"))
+        (println "lambda-mvp-jnk: WARNING -- the function itself reported an error"
+                 (str "(errorType: " (get parsed "errorType") ") -- see response body/log tail above."))))))
 
 (defn teardown! []
   (require-aws-identity!)
