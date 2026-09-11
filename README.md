@@ -149,11 +149,11 @@ section for its own (different) registry/release-asset 403 problems --
 same category of issue, different specific symptom.
 
 **A note on the committed `zscaler-root-ca.pem`**: this repo's own
-Dockerfile currently trusts one specific corporate proxy's root CA by
-default, because that's what this project's own development network
-needed. It's not trusted by default (see `TRUST_EXTRA_CA` above) -- if you're
-forking or adapting this project and DO need it, swap in your own
-network's CA rather than assuming this one applies to you.
+Dockerfile can trust one specific corporate proxy's root CA, because
+that's what this project's own development network needed -- but it's
+not trusted by default (see `TRUST_EXTRA_CA` above). If you're forking
+or adapting this project and DO need it, swap in your own network's CA
+rather than assuming this one applies to you.
 
 ## Extension points
 
