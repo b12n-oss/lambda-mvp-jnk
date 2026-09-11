@@ -83,9 +83,15 @@ std::string jank_getenv(const char* name) {
       (let [{:keys [status headers body]} (next-invocation host port)]
         (if (= 200 status)
           (let [{:keys [request-id] :as ctx} (invocation-context headers)]
-            ;; TODO (P1.T2.CONCERN): Jolt version has try/catch here, but jank
-            ;; compiler hangs on try/catch blocks (see P1.T1 report). Removing
-            ;; for now; Task 3 (main.jank) will need error handling.
+            ;; NO try/catch around the handler call, unlike the Jolt version --
+            ;; try/catch is verified prohibitively slow to jank compile in this
+            ;; build (15+ minutes, non-terminating, in total isolation with zero
+            ;; interop code -- see spec Open Risk #9). If `handler` throws, the
+            ;; exception propagates uncaught and crashes the process. For this
+            ;; project's own demo handler (string-building + an atom swap!, no
+            ;; I/O) that path is unreachable in practice, but this is a real,
+            ;; documented divergence from the Jolt sibling's graceful
+            ;; per-invocation HandlerError reporting.
             (post-response host port request-id (handler body ctx))
             (recur))
           (println "runtime: /invocation/next returned" status "-- exiting"))))))
