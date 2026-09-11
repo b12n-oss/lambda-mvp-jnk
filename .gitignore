@@ -4,3 +4,5 @@ dist/
 .DS_Store
 .mock-runtime-api-port
 _site/
+AGENTS.md
+CLAUDE.md
