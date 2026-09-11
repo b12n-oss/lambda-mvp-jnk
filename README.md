@@ -135,10 +135,12 @@ Ubuntu's package mirrors -- neither is a jank requirement:
   "no valid OpenPGP data found"**: your network is intercepting TLS to
   `ppa.jank-lang.org` (check with
   `openssl s_client -connect ppa.jank-lang.org:443 -servername ppa.jank-lang.org`
-  and look at the issuer). Export your proxy's actual root CA and trust
-  it in the image (`COPY` + `update-ca-certificates`) -- never
-  `-k`/`--insecure` or `Acquire::https::Verify-Peer "false"`, which
-  trade a real fix for a weaker one.
+  and look at the issuer). Export your proxy's actual root CA, replace
+  `zscaler-root-ca.pem` with it, and build with `TRUST_EXTRA_CA=true bb
+  image` (the CA-trust step is OFF by default -- see the Dockerfile's
+  `TRUST_EXTRA_CA` ARG) -- never `-k`/`--insecure` or
+  `Acquire::https::Verify-Peer "false"`, which trade a real fix for a
+  weaker one.
 
 If neither symptom shows up on your network, you don't need either
 line -- they're pure overhead on a clean connection, not a correctness
@@ -149,9 +151,9 @@ same category of issue, different specific symptom.
 **A note on the committed `zscaler-root-ca.pem`**: this repo's own
 Dockerfile currently trusts one specific corporate proxy's root CA by
 default, because that's what this project's own development network
-needed. If you're forking or adapting this project, swap in your own
-network's CA (or remove the step) rather than assuming this one
-applies to you.
+needed. It's not trusted by default (see `TRUST_EXTRA_CA` above) -- if you're
+forking or adapting this project and DO need it, swap in your own
+network's CA rather than assuming this one applies to you.
 
 ## Extension points
 
