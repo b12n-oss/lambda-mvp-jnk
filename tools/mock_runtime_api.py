@@ -57,7 +57,7 @@ class MockRuntimeAPI(BaseHTTPRequestHandler):
 def check_hello(responses):
     ok = True
     for i, (path, body) in enumerate(responses, 1):
-        if "hello from jolt" not in body:
+        if "hello from jank" not in body:
             ok = False
             print("FAIL: response %d body missing greeting: %s" % (i, body))
     return ok
