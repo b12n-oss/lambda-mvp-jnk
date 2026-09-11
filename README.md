@@ -47,6 +47,9 @@ flowchart LR
   [docs/guide/runtime-api-loop.md](docs/guide/runtime-api-loop.md).
 - `src/net/b12n/lambda_mvp/runtime.jank`: the Runtime API loop, ported
   from the Jolt sibling. Generic: takes any `(fn [event-json ctx])`.
+  Unlike the Jolt sibling, a handler throw here crashes the whole
+  process, not just that one invocation -- see
+  [docs/guide/runtime-api-loop.md](docs/guide/runtime-api-loop.md).
 - `src/net/b12n/lambda_mvp/handler.jank`: the demo handler: greeting +
   raw-event echo + warm-invocation counter.
 - `src/net/b12n/lambda_mvp/main.jank`: `-main`, the `jank compile` target.
@@ -67,6 +70,8 @@ flowchart LR
 - An AWS account and credentials the `aws` CLI can already use
   (`AWS_PROFILE`/`AWS_REGION` env vars, or `aws configure`). Nothing in
   this repo hardcodes a profile, account, or region.
+- `python3`, for `bb probe`'s mock Runtime API server
+  (`tools/mock_runtime_api.py`).
 
 ## Quickstart
 
@@ -94,6 +99,7 @@ bb deploy       # idempotent: ECR repo + IAM role + Lambda function
 bb invoke       # single ad-hoc invoke, prints the response body + REPORT line
 bb bench        # cold/warm boot-time comparison across memory tiers
 bb teardown     # delete the function, role, and ECR repo when you're done
+bb clean        # remove build artifacts
 ```
 
 `bb image` builds for amd64 (jank's PPA does not publish an arm64

@@ -2,7 +2,7 @@
   "Standing smoke test for net.b12n.lambda-mvp.http -- jank has no unit
   test framework this project uses (see test/bench_test.clj, which is
   pure babashka and can't touch jank code at all). Run via:
-    jank compile --module-path src:dev --target-dir target --name http_smoke dev.http-smoke
+    jank compile --module-path .:src --target-dir target --name http_smoke dev.http-smoke
     ./target/http_smoke <port>
   against any HTTP server listening on 127.0.0.1:<port>."
   (:require [net.b12n.lambda-mvp.http :as http]))

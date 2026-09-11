@@ -18,7 +18,7 @@ This is tractable specifically because the Runtime API is plain HTTP
 on a loopback address with no TLS -- a general-purpose HTTP/HTTPS
 client would be a much bigger undertaking.
 
-Four interop gotchas shaped the implementation (see the code comments
+Six interop gotchas shaped the implementation (see the code comments
 in `http.jank` for exactly where each applies):
 
 1. `htons` is a preprocessor macro on Darwin (likely glibc too), not a
@@ -31,6 +31,15 @@ in `http.jank` for exactly where each applies):
 4. `cpp/unsafe-cast` refuses a `sockaddr_in*` -> `sockaddr*` cast
    outright -- done inside a `cpp/raw` C helper instead, where ordinary
    C++ casting rules apply.
+5. `send`'s second parameter is `const void*`, and jank has no
+   object->void* conversion path -- casting the jank string to
+   `(:* cpp/char)` first routes through a conversion path that already
+   works, and C++ implicitly widens `char*` to `const void*` from
+   there.
+6. A `defn` that shadows a `clojure.core` symbol (here, `get`) compiles
+   clean with only a warning, but crashes the COMPILED BINARY at load
+   time with a hard runtime error -- `(:refer-clojure :exclude [get])`
+   in the ns form is required, not stylistic.
 
 ## One TCP connection per call
 
@@ -78,6 +87,35 @@ succeeded -- neither one tells you that here. Check CloudWatch Logs for
 the function instead. jank's own printed error report, with the
 message, data, and stack trace, is the only place a startup throw
 actually shows up.
+
+## A handler throw crashes the whole process too, not just that invocation
+
+The startup case above is about `main.jank` calling `runtime/run` for
+the first time. The same missing `try`/`catch` also wraps every
+SUBSEQUENT call to `handler` inside `run`'s own loop -- there's no
+catch point around `(handler body ctx)` either, for the identical
+reason (spec Open Risk #9: a trivial `try`/`catch` took 15+ minutes to
+`jank compile` and never finished).
+
+The Jolt sibling wraps each invocation's handler call individually, so
+a single bad event reports a per-invocation `HandlerError` to the
+Runtime API and the loop continues to the next event. This port can't
+do that yet: if `handler` throws for any reason on ANY invocation, the
+exception propagates uncaught, the process exits (with the same exit-0
+behavior described above), and the whole Lambda execution environment
+goes down -- not just the one invocation that triggered it. The next
+invocation gets a fresh cold start instead of a graceful per-event
+error response.
+
+For this project's own demo handler (string-building and an atom
+`swap!`, no I/O, no parsing of untrusted structure) that path is
+unreachable in practice. It becomes a real concern the moment a
+handler you write can throw -- parsing the event JSON, calling out to
+another service, anything I/O-bound. Until a future jank release
+resolves the try/catch compile-time cost, keep handlers defensive
+(validate input before it can throw, or return an error payload rather
+than throwing) rather than relying on the runtime loop to catch a
+mistake for you.
 
 ## Testing without AWS: the mock Runtime API
 

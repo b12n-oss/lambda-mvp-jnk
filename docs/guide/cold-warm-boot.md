@@ -26,6 +26,19 @@ don't read a delta between this repo's table and the Jolt sibling's as
 "jank is faster/slower than jolt" without accounting for the packaging
 difference first.
 
+There's a second confound worth naming: the image itself is much
+bigger than the code it runs. `jank compile` produces one small native
+binary (single-digit megabytes), but the image around it also carries
+the full `ubuntu:24.04` base plus jank's own APT package and its
+LLVM/Clang toolchain dependencies -- none of which the compiled binary
+needs at runtime, only at build time. A multi-stage build that copies
+just the compiled binary into a minimal runtime base image (see
+README's Extension points) would shrink the pulled/unpacked image
+substantially and likely change the cold-start numbers measurably.
+This port doesn't do that yet, so today's `bb bench` numbers include
+the cost of pulling/unpacking packages the running function never
+touches.
+
 ## Reproducing a run
 
 ```sh

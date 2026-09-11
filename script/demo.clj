@@ -29,7 +29,7 @@
   (let [missing (remove fs/which ["docker" "aws"])]
     (when (seq missing)
       (die! "not on PATH:" (str/join ", " missing)
-            "-- see Prerequisites in docs/guide/getting-started.md."))))
+            "-- see Requirements in README.md."))))
 
 (defn- require-aws! []
   (let [region (some not-empty [(System/getenv "AWS_REGION")

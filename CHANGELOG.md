@@ -29,3 +29,6 @@ All notable changes to this project are documented here.
 - A compiled jank binary exits 0 even on an uncaught startup throw, and
   `main.jank` has no `try`/`catch` to send a Runtime API init-error
   either -- see docs/guide/runtime-api-loop.md.
+- A handler throw during an invocation (not just at startup) also
+  crashes the whole process, unlike the Jolt sibling's per-invocation
+  error reporting -- see docs/guide/runtime-api-loop.md.
