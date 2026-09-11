@@ -1,0 +1,15 @@
+(ns dev.http-smoke
+  "Standing smoke test for net.b12n.lambda-mvp.http -- jank has no unit
+  test framework this project uses (see test/bench_test.clj, which is
+  pure babashka and can't touch jank code at all). Run via:
+    jank compile --module-path src:dev --target-dir target --name http_smoke dev.http-smoke
+    ./target/http_smoke <port>
+  against any HTTP server listening on 127.0.0.1:<port>."
+  (:require [net.b12n.lambda-mvp.http :as http]))
+
+(defn -main [& args]
+  (let [port (parse-long (first args))
+        {:keys [status headers body]} (http/get "127.0.0.1" port "/runtime/invocation/next")]
+    (println "GET status:" status)
+    (println "GET headers:" (pr-str headers))
+    (println "GET body:" body)))

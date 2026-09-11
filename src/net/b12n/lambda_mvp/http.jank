@@ -1,0 +1,167 @@
+(ns net.b12n.lambda-mvp.http
+  "Minimal HTTP/1.1-over-raw-socket client for the Lambda Runtime API.
+  Loopback only, no TLS -- the Runtime API never needs either. One TCP
+  connection per call (connect -> send -> recv -> close), not a
+  persistent keep-alive connection -- see docs/guide/runtime-api-loop.md
+  for why that's a deliberate, named simplification. host must be a
+  dotted-decimal IPv4 address (AWS_LAMBDA_RUNTIME_API is documented to
+  be one, never a hostname) -- inet_pton doesn't resolve hostnames."
+  ;; :exclude [get] is required, not stylistic: this namespace's own
+  ;; `get` fn (below, per the interface spec) shadows clojure.core/get.
+  ;; On JVM Clojure that's merely a REPL warning at compile time. On
+  ;; jank, without the exclude, the SAME shadowing compiles clean (just
+  ;; a warning) but then throws a hard runtime error the moment this
+  ;; module loads -- "get already refers to #'<ns>/get in ns <ns>",
+  ;; raised from clojure.core/refer during namespace load, not from
+  ;; anything analyze-time. Found by hitting the actual failure (the
+  ;; compiled binary crashed on startup) and confirmed via a minimal
+  ;; two-file reproduction before landing the exclude here.
+  (:refer-clojure :exclude [get])
+  (:require [clojure.string :as str])
+  (:include "sys/socket.h" "netinet/in.h" "arpa/inet.h" "unistd.h"
+            "string.h" "stdlib.h" "errno.h" "stdio.h"))
+
+;; cpp/raw: things jank's cpp/ interop can't express directly, each one
+;; found by hitting the actual failure, not guessed in advance --
+;; htons is a preprocessor macro on Darwin (likely glibc too), not a
+;; linkable symbol; cpp/new doesn't zero-initialize a struct, which
+;; corrupts a sockaddr_in's platform-specific padding; and
+;; cpp/unsafe-cast refuses a sockaddr_in*->sockaddr* cast outright.
+(cpp/raw "
+uint16_t jank_htons(uint16_t x) { return htons(x); }
+void jank_zero_sockaddr_in(struct sockaddr_in* a) { memset(a, 0, sizeof(struct sockaddr_in)); }
+int jank_connect(int fd, struct sockaddr_in* a) {
+  return connect(fd, (struct sockaddr*)a, sizeof(struct sockaddr_in));
+}
+std::string jank_recv_chunk(int fd, int max_len) {
+  char* buf = (char*)malloc(max_len);
+  ssize_t n = recv(fd, buf, max_len, 0);
+  std::string result = (n > 0) ? std::string(buf, n) : std::string();
+  free(buf);
+  return result;
+}
+")
+
+(defn- open-socket
+  "Connect a fresh TCP socket to host:port. Returns the fd, or throws."
+  [host port]
+  (let [fd (cpp/socket cpp/AF_INET cpp/SOCK_STREAM (cpp/int 0))
+        addr (cpp/new cpp/sockaddr_in)]
+    ;; cpp/new already returns a sockaddr_in* -- passing (cpp/& addr)
+    ;; anywhere below would silently take the address of THIS LOCAL
+    ;; BINDING (a pointer to a pointer), which compiles and corrupts
+    ;; the connect() call at runtime. Always pass addr itself.
+    (cpp/jank_zero_sockaddr_in addr)
+    (cpp/= (.-sin_family addr) (cpp/cast cpp/sa_family_t cpp/AF_INET))
+    (cpp/= (.-sin_port addr) (cpp/jank_htons (cpp/cast cpp/uint16_t port)))
+    (cpp/inet_pton cpp/AF_INET host (cpp/& (.-sin_addr addr)))
+    (let [rc (cpp/jank_connect fd addr)]
+      (if (cpp/< rc (cpp/int 0))
+        (throw (ex-info "http: connect failed" {:host host :port port}))
+        fd))))
+
+(defn- header-block-end
+  "Index just past the blank line separating headers from body, or nil
+  if the full header block hasn't arrived yet."
+  [s]
+  (str/index-of s "\r\n\r\n"))
+
+(defn- parse-headers
+  "status-line + header lines -> {:status (a number, via parse-long --
+  NOT Integer/parseInt, which is JVM-only and doesn't exist in jank)
+  :headers (a map, lowercased keys, matching the Jolt http-client's
+  lowercase-keys convention so callers never have to guess casing)}."
+  [head]
+  (let [lines (str/split-lines head)
+        status-line (first lines)
+        status (parse-long (second (str/split status-line #"\s+" 3)))
+        headers (into {}
+                      (for [line (rest lines)
+                            :let [idx (str/index-of line ":")]
+                            :when idx]
+                        [(str/lower-case (subs line 0 idx))
+                         (str/trim (subs line (inc idx)))]))]
+    {:status status :headers headers}))
+
+(defn- content-length [headers]
+  ;; clojure.core/get qualified explicitly -- :exclude [get] above (see
+  ;; the ns-form comment) means the bare symbol `get` in this namespace
+  ;; now means only our own [host port path] fn, not the map-lookup one.
+  (if-let [v (clojure.core/get headers "content-length")]
+    (parse-long v)
+    0))
+
+(defn- read-response
+  "Recv-loop: accumulate chunks until the header block plus
+  Content-Length bytes of body have arrived, or the peer closes the
+  connection (chunk comes back empty). Returns the raw accumulated
+  string -- callers split head/body themselves."
+  [fd]
+  (loop [acc ""]
+    (let [chunk (cpp/jank_recv_chunk fd (cpp/int 4096))]
+      (if (empty? chunk)
+        acc
+        (let [acc' (str acc chunk)
+              hdr-end (header-block-end acc')]
+          (if (nil? hdr-end)
+            (recur acc')
+            (let [head (subs acc' 0 hdr-end)
+                  body-start (+ hdr-end 4)
+                  {:keys [headers]} (parse-headers head)
+                  want (+ body-start (content-length headers))]
+              (if (>= (count acc') want)
+                acc'
+                (recur acc')))))))))
+
+(defn- do-request [host port request-text]
+  (let [fd (open-socket host port)]
+    ;; A FIFTH interop gotcha, found by hitting the actual failure during
+    ;; implementer verification (not documented in the original design):
+    ;; jank auto-converts a jank string to a `const char*` C parameter
+    ;; (see inet_pton's `host` arg above -- that conversion path is real
+    ;; and already relied on), but send()'s second parameter is
+    ;; `const void*`, and jank has no object->void* conversion path, so
+    ;; passing request-text directly here fails to compile with
+    ;; analyze/invalid-cpp-call. Casting to `(:* cpp/char)` first routes
+    ;; through the conversion path that already works, and plain C++
+    ;; then implicitly widens char* -> const void* for the actual call --
+    ;; no new cpp/raw helper needed. Verified byte-exact (no truncation,
+    ;; no corruption) via a raw TCP capture-server round-trip before
+    ;; landing this cast.
+    (cpp/send fd (cpp/cast (:* cpp/char) request-text) (cpp/cast cpp/size_t (count request-text)) (cpp/int 0))
+    (let [raw (read-response fd)
+          hdr-end (header-block-end raw)]
+      (cpp/close fd)
+      (if (nil? hdr-end)
+        {:status 0 :headers {} :body ""}
+        (let [head (subs raw 0 hdr-end)
+              body (subs raw (+ hdr-end 4))
+              {:keys [status headers]} (parse-headers head)]
+          {:status status :headers headers :body body})))))
+
+(defn get
+  "GET path from host:port. No timeout -- matches the Runtime API's
+  long-poll /invocation/next contract (blocks until Lambda has work)."
+  [host port path]
+  (do-request host port
+              (str "GET " path " HTTP/1.1\r\n"
+                   "Host: " host ":" port "\r\n"
+                   "Connection: close\r\n\r\n")))
+
+(defn post
+  "POST body to path on host:port. extra-header, if given, is a
+  [name value] pair -- used for Lambda-Runtime-Function-Error-Type on
+  the error-reporting paths. body is assumed ASCII (true for this
+  project's JSON payloads): Content-Length uses (count body), which
+  undercounts multi-byte UTF-8 -- documented limitation, not a bug for
+  this project's own handler."
+  ([host port path body] (post host port path body nil))
+  ([host port path body extra-header]
+   (do-request host port
+               (str "POST " path " HTTP/1.1\r\n"
+                    "Host: " host ":" port "\r\n"
+                    "Content-Type: application/json\r\n"
+                    "Content-Length: " (count body) "\r\n"
+                    (when extra-header (str (first extra-header) ": " (second extra-header) "\r\n"))
+                    "Connection: close\r\n\r\n"
+                    body))))
