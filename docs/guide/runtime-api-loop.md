@@ -44,6 +44,41 @@ was verified only against the offline mock server and a generic local
 test server during this port's development, not against AWS itself
 until the real deploy/invoke smoke test.
 
+## Startup failures are silent: no try/catch, no init-error, exit 0
+
+`main.jank`'s `-main` calls `runtime/run` with no `try`/`catch` around
+it, unlike the Jolt sibling's `main.clj`. That's not an oversight: a
+trivial `try`/`throw`/`catch` program with zero interop content took
+15+ minutes to `jank compile` and never finished, confirmed directly
+rather than assumed (spec Open Risk #9). `main.jank` can't afford that
+cost, so the try/catch stays out until a future jank release fixes the
+underlying compile-time issue.
+
+The consequence is worth knowing before you deploy this. If
+`runtime/run` throws during startup -- a malformed
+`AWS_LAMBDA_RUNTIME_API`, or the initial connection to the Runtime API
+sidecar failing -- the exception propagates all the way up, uncaught.
+jank prints its own error report to stderr (message, data, and a stack
+trace), but the process then exits 0 anyway, regardless of the throw.
+This was verified directly against a trivial uncaught-throw probe, not
+assumed.
+
+Two things follow from that exit code. First, `runtime/post-init-error`
+never runs, because there's no catch point left to call it from (the
+function stays defined and unused in `runtime.jank`, ready to wire back
+in once the compile-time cost is fixed). So the Lambda Runtime API never
+sees an init-error report for this failure. Second, nothing in the
+process's own exit status signals that anything went wrong, so a
+container orchestrator or Lambda's own supervisor watching this process
+gets no signal from it either.
+
+If a deployment seems to hang or never responds, don't trust a clean
+exit code or the absence of an init-error report to mean startup
+succeeded -- neither one tells you that here. Check CloudWatch Logs for
+the function instead. jank's own printed error report, with the
+message, data, and stack trace, is the only place a startup throw
+actually shows up.
+
 ## Testing without AWS: the mock Runtime API
 
 `tools/mock_runtime_api.py` is reused verbatim from the Jolt sibling --

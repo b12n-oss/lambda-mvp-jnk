@@ -26,3 +26,6 @@ All notable changes to this project are documented here.
 - Cold/warm numbers from `bb bench` are not directly comparable to the
   Jolt sibling's own numbers -- different packaging model, different
   cold-start profile.
+- A compiled jank binary exits 0 even on an uncaught startup throw, and
+  `main.jank` has no `try`/`catch` to send a Runtime API init-error
+  either -- see docs/guide/runtime-api-loop.md.
