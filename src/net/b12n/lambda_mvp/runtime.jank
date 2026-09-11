@@ -47,6 +47,11 @@ std::string jank_getenv(const char* name) {
   (str "{\"errorMessage\":" (pr-str (str msg))
        ",\"errorType\":" (pr-str (str type)) "}"))
 
+;; Unused today for the same reason `post-init-error` is unused at its
+;; own call site (see main.jank's docstring): `run` has no catch point
+;; around the per-invocation handler call to call this from (spec Open
+;; Risk #9 -- try/catch is prohibitively slow to jank compile). Kept
+;; defined, ready to wire back in once that's resolved.
 (defn- post-error [host port req-id msg type]
   (http/post host port
              (str "/" api-version "/runtime/invocation/" req-id "/error")
@@ -94,4 +99,6 @@ std::string jank_getenv(const char* name) {
             ;; per-invocation HandlerError reporting.
             (post-response host port request-id (handler body ctx))
             (recur))
-          (println "runtime: /invocation/next returned" status "-- exiting"))))))
+          (if (zero? status)
+            (println "runtime: /invocation/next got no parseable HTTP response (status 0) -- likely a transport failure (connection refused/reset, or a response http.jank couldn't parse), NOT a clean Runtime API shutdown signal -- exiting")
+            (println "runtime: /invocation/next returned" status "-- exiting")))))))
