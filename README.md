@@ -168,7 +168,9 @@ Not built here, but straightforward follow-ups if you need them:
 
 ## References
 
-- [jank](https://jank-lang.org) · [lambda-mvp-jlt](https://github.com/b12n-oss/lambda-mvp-jlt) (the Jolt sibling)
+- [jank](https://jank-lang.org) · [lambda-mvp-jlt](https://github.com/b12n-oss/lambda-mvp-jlt)
+  (the Jolt sibling) · [lambda-mvp-cljs](https://github.com/b12n-oss/lambda-mvp-cljs)
+  (the ClojureScript sibling)
 - [AWS Lambda Runtime API / custom runtimes](https://docs.aws.amazon.com/lambda/latest/dg/runtimes-custom.html)
 - [AWS Lambda container images](https://docs.aws.amazon.com/lambda/latest/dg/images-create.html)
 
