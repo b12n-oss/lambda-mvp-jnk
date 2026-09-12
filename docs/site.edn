@@ -1,0 +1,18 @@
+;; Configuration for the documentation site, read by the docs-engine
+;; (https://github.com/jlt-commons/docs-engine).
+;;
+;; Build it locally with `jolt site:build`/`jolt site:serve` (or, without
+;; jolt, `bb site:build`/`bb site:serve` -- see .github/workflows/site.yml).
+;; CI builds it on every push and pull request, and publishes from main:
+;; the PUBLISH_SITE repository variable is "true" and GitHub Pages is
+;; enabled.
+{;; :base-path is what makes this a project site rather than an org one.
+ ;; The site is served at https://b12n-oss.github.io/lambda-mvp-jnk/, so
+ ;; every URL the engine emits needs that prefix. Leave it out and the
+ ;; pages still render, but each one loads the ORGANIZATION site's
+ ;; stylesheet and every asset 404s. The workflow has a check for exactly
+ ;; this (same pattern as the lambda-mvp-jlt sibling's own site.yml).
+ :base-path   "/lambda-mvp-jnk"
+
+ :title       "lambda-mvp-jnk"
+ :description "A shareable AWS Lambda custom runtime in jank (native Clojure compiled to native code via C++/Clang/LLVM), deployed as a container image, with a bb bench tool for reproducing a cold-vs-warm boot-time comparison against your own AWS account."}

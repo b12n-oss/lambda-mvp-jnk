@@ -1,0 +1,113 @@
+name: Site
+
+# Builds the documentation site via jlt-commons/docs-engine (same engine
+# and pin as the lambda-mvp-jlt sibling's own site.yml), and publishes it
+# to GitHub Pages from main once that is switched on. This repo owns its
+# content, its config in docs/site.edn, and nothing else about the
+# rendering.
+#
+# The engine is pinned to a tag rather than tracking its main branch, so a
+# change over there cannot break these docs without someone choosing it.
+#
+# This repo is public: builds run on every push to main and every pull
+# request, plus on-demand via workflow_dispatch.
+#
+# The deploy job is gated on the PUBLISH_SITE repository variable (set to
+# "true") and GitHub Pages being enabled on this repo.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Deploys must not race, and a half-applied Pages deployment is worse than a
+# slightly stale one, so main is never cancelled. Pull request builds are
+# scoped per ref and cancel their own earlier runs.
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  DOCS_ENGINE_REF: v0.3.2
+  BASE_PATH: /lambda-mvp-jnk
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check out the docs engine
+        uses: actions/checkout@v7
+        with:
+          repository: jlt-commons/docs-engine
+          ref: ${{ env.DOCS_ENGINE_REF }}
+          path: .docs-engine
+
+      - name: Install jolt
+        uses: jlt-commons/setup-jolt@v1
+
+      - name: Build
+        working-directory: .docs-engine
+        run: jolt run build "$GITHUB_WORKSPACE"
+
+      # Each check below names a symptom a reader would otherwise have to
+      # diagnose from a rendered page. This repo's own docs/guide/*.md set
+      # doesn't include an architecture.md/mermaid page the way the jlt
+      # sibling's does (verified locally against the real generated
+      # output before writing this list -- not copied blind from jlt's
+      # own check, which would fail here on a page this repo doesn't have).
+      - name: Check the build
+        run: |
+          set -euo pipefail
+          out=_site
+
+          test -f "$out/index.html"       || { echo "no homepage generated"; exit 1; }
+          test -f "$out/guide/index.html" || { echo "no guide page generated"; exit 1; }
+          test -f "$out/css/screen.css"   || { echo "static assets missing"; exit 1; }
+          test -f "$out/404.html"         || { echo "no 404 page generated"; exit 1; }
+          test -f "$out/guide/runtime-api-loop.html"     || { echo "runtime-api-loop guide page missing"; exit 1; }
+          test -f "$out/guide/container-image-build.html" || { echo "container-image-build guide page missing"; exit 1; }
+          test -f "$out/guide/cold-warm-boot.html"       || { echo "cold-warm-boot guide page missing"; exit 1; }
+
+          ! grep -rq '{{site-base}}' "$out"/index.html "$out"/guide/*.html \
+            || { echo "unrendered template variable"; exit 1; }
+
+          # The failure mode this site's base path exists to prevent. Served at
+          # b12n-oss.github.io/lambda-mvp-jnk/, a root-absolute URL loads the
+          # ORGANIZATION site's asset instead of this project's. The page still
+          # renders, wearing the wrong clothes, so nothing but a check catches it.
+          if grep -ohE '(href|src)="/[^"]*"' "$out"/index.html "$out"/404.html "$out"/guide/*.html \
+               | grep -vE "=\"$BASE_PATH/"; then
+            echo "the URLs above escape $BASE_PATH and would resolve against the org site"
+            exit 1
+          fi
+
+          echo "build looks correct: every URL under $BASE_PATH"
+
+      - name: Upload the Pages artifact
+        if: github.ref == 'refs/heads/main' && vars.PUBLISH_SITE == 'true'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    # Publishing is off until BOTH of these are true: the PUBLISH_SITE
+    # repository variable is set to "true", and GitHub Pages is enabled on
+    # this repo.
+    if: github.ref == 'refs/heads/main' && vars.PUBLISH_SITE == 'true'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
