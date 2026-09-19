@@ -57,6 +57,37 @@ own numbers -- a single run, one account, one region, one moment in
 time. Run `bb bench` yourself for a number that reflects your own
 account and region.
 
+## A second run, 2026-09-19
+
+The table above stays as recorded. This is a fresh `bb bench` against the same
+account and region a week later, taken while the whole `lambda-mvp-*` family
+was re-measured together after jolt shipped v0.8.9:
+
+| Metric | 2048 MB | 3008 MB |
+|---|---|---|
+| Cold `Init Duration` | 615.4 ms | 61.3 ms |
+| Cold `Duration` | 1.7 ms | 1.6 ms |
+| Warm `Duration` (min/median/max) | 1.3 / 1.4 / 1.6 ms | 1.2 / 1.5 / 1.6 ms |
+| Max Memory Used | 26 MB | 26 MB |
+
+Everything except Cold Init landed on top of the first run: handler time within
+0.1 ms, warm time within 0.2 ms, Max Memory Used identical at 26 MB both tiers.
+
+The order effect reproduced too, and more strongly. The 3008 MB tier's Cold
+Init came in at 61.3 ms against the 2048 MB tier's 615.4 ms, the same inversion
+the first run showed at 64.0 ms against 510.3 ms. Two independent runs landing
+within about 3 ms of each other on the second tier, while the first tier moved
+by more than 100 ms, is a good argument that the explanation above is right:
+the 2048 MB tier pays the image pull and the 3008 MB tier, running second in
+the same session, does not.
+
+One caveat this round surfaced that the first did not record. The `Dockerfile`
+installs jank with `apt-get install -y jank` from the PPA, with no version pin,
+so a rebuild picks up whatever the PPA currently serves. This image was built
+from package version `0.1-noble`. A future rebuild could quietly measure a
+different jank, unlike the Jolt siblings whose `JOLT_VERSION` build arg pins
+theirs. Pinning it would make this table reproducible in the way those are.
+
 One result here is worth naming rather than smoothing over: the 3008
 MB tier's cold `Init Duration` (64.0 ms) is far BELOW the 2048 MB
 tier's (510.3 ms), the opposite of what more memory buying a faster
