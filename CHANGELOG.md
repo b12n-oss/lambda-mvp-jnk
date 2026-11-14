@@ -22,13 +22,13 @@ All notable changes to this project are documented here.
 
 ### Known limits
 - `http.jank` opens one TCP connection per Runtime API call rather
-  than a persistent connection -- see docs/guide/runtime-api-loop.md.
+  than a persistent connection (see docs/guide/runtime-api-loop.md).
 - Cold/warm numbers from `bb bench` are not directly comparable to the
-  Jolt sibling's own numbers -- different packaging model, different
-  cold-start profile.
+  Jolt sibling's own numbers, because the packaging model and the
+  cold-start profile differ.
 - A compiled jank binary exits 0 even on an uncaught startup throw, and
   `main.jank` has no `try`/`catch` to send a Runtime API init-error
-  either -- see docs/guide/runtime-api-loop.md.
+  either (see docs/guide/runtime-api-loop.md).
 - A handler throw during an invocation (not just at startup) also
   crashes the whole process, unlike the Jolt sibling's per-invocation
-  error reporting -- see docs/guide/runtime-api-loop.md.
+  error reporting (see docs/guide/runtime-api-loop.md).
